@@ -38,6 +38,12 @@ cd ~/.openclaw/workspace-fitness/skills
 git clone https://github.com/tanhhhh4/agent-overseer.git
 ```
 
+### 配置消息推送
+为了能接收到包工头的异常告警和定时简报，请在使用前配置你的飞书 ID（或其他受支持的渠道 ID）：
+```bash
+export OVERSEER_TARGET_ID="你的飞书_ID"
+```
+
 激活后，在 OpenClaw 聊天窗口发送指令即可：
 > “小马驹，用 agent-overseer 帮我把 `codex -m gpt-5.4 --dangerously-bypass-approvals-and-sandbox exec '帮我写个贪吃蛇'` 挂到后台盯着。”
 

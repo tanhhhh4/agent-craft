@@ -33,6 +33,7 @@ class AgentOverseer {
         let sameFileCount = 0;
         let lastModifiedFile = '';
         let lastModifiedTime = 0;
+        let lastReportTime = Date.now(); // 新增：记录上次汇报时间
 
         // 核心架构 2：通过文件系统的 mtime 判断进度，告别日志抓取
         setInterval(() => {
@@ -57,8 +58,26 @@ class AgentOverseer {
                     lastModifiedTime = latestFileStat.mtime;
                     sameFileCount = 0;
                 }
+                
+                // 3. 新增：10 分钟定时汇报机制
+                const now = Date.now();
+                if (now - lastReportTime >= 10 * 60 * 1000) { // 10分钟
+                    const progressMsg = latestFileStat 
+                        ? `最新进展：正在处理文件 ${latestFileStat.file}`
+                        : `最新进展：目前还没看到新文件变动，但我还盯着呢。`;
+                    
+                    this.triggerAlert(
+                        taskName, 
+                        `【定时简报】任务正常运行中。\n${progressMsg}\n(如果需要我打断它，请直接跟我说)`
+                    );
+                    lastReportTime = now;
+                    // 如果一直没变动，到了10分钟也会汇报，但不重置 sameFileCount 会导致每30s一直报鬼打墙
+                    // 我们保留鬼打墙的高频报警，或者重置都行，这里不干扰原有的死锁逻辑
+                }
+
             } catch (err) {
                 console.log(`[Overseer] 🔴 发现任务进程意外结束或被 OS Killed, 发送告警并准备收尸...`);
+                this.triggerAlert(taskName, `【严重阻碍】进程已经挂掉或被杀！快来看看！`);
             }
         }, 30000); // 30s 轮询
     }
@@ -86,6 +105,17 @@ class AgentOverseer {
     static triggerAlert(taskName, message) {
         // 核心架构 3：事件驱动精准推送
         console.log(`[Overseer 飞书推送] 任务 ${taskName}: ${message}`);
+        
+        // 新增：调用 OpenClaw 命令行发送消息
+        try {
+            // 注意：因为里面有换行和引号，简单包一下
+            const msgBody = `[包工头 👷] 任务: ${taskName}\n${message}`;
+            // Base64 编码一下发过去比较安全，防止引用的引号炸掉 shell，这里偷懒用单引号+转义一下
+            const safeMsg = msgBody.replace(/'/g, "'\\''");
+            execSync(`openclaw message send --message '${safeMsg}'`);
+        } catch (e) {
+            console.error(`[Overseer] 🔴 飞书推送失败:`, e.message);
+        }
     }
 
     /**

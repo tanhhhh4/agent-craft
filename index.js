@@ -112,7 +112,8 @@ class AgentOverseer {
             const msgBody = `[包工头 👷] 任务: ${taskName}\n${message}`;
             // Base64 编码一下发过去比较安全，防止引用的引号炸掉 shell，这里偷懒用单引号+转义一下
             const safeMsg = msgBody.replace(/'/g, "'\\''");
-            execSync(`openclaw message send --message '${safeMsg}'`);
+            // 必须指定 --target 和 --channel，这里写死发给大哥的飞书 ID (ou_1287eaf8012ecbbff4fc2fd36af88b54)
+            execSync(`openclaw message send --target "ou_1287eaf8012ecbbff4fc2fd36af88b54" --channel "feishu" --message '${safeMsg}'`);
         } catch (e) {
             console.error(`[Overseer] 🔴 飞书推送失败:`, e.message);
         }

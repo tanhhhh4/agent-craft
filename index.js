@@ -16,7 +16,7 @@ class AgentOverseer {
         // 核心架构 1：ulimit 资源限制 (2GB 内存) + tmux 后台托管
         const safeCommand = `ulimit -v 2097152; ${command}`;
         const tmuxCmd = `tmux new-session -d -s ${taskName} '${safeCommand}'`;
-        const target = targetId || "ou_1287eaf8012ecbbff4fc2fd36af88b54"; // 默认 fallback
+        const target = targetId; 
         
         try {
             execSync(tmuxCmd);
@@ -114,8 +114,12 @@ class AgentOverseer {
             const msgBody = `[包工头 👷] 任务: ${taskName}\n${message}`;
             // Base64 编码一下发过去比较安全，防止引用的引号炸掉 shell，这里偷懒用单引号+转义一下
             const safeMsg = msgBody.replace(/'/g, "'\\''");
-            const targetId = target || "ou_1287eaf8012ecbbff4fc2fd36af88b54";
-            execSync(`openclaw message send --target "${targetId}" --channel "feishu" --message '${safeMsg}'`);
+            
+            if (target) {
+                execSync(`openclaw message send --target "${target}" --channel "feishu" --message '${safeMsg}'`);
+            } else {
+                console.log(`[Overseer] ⚠️ 未配置 targetId，跳过飞书消息推送: ${message}`);
+            }
         } catch (e) {
             console.error(`[Overseer] 🔴 飞书推送失败:`, e.message);
         }

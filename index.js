@@ -10,12 +10,13 @@ class AgentOverseer {
     /**
      * 启动并托管一个 AI CLI 进程
      */
-    static startTask(taskName, command, workspaceDir = process.cwd()) {
+    static startTask(taskName, command, workspaceDir = process.cwd(), targetId = process.env.OVERSEER_TARGET_ID) {
         console.log(`[Overseer] 准备拉起任务: ${taskName}`);
         
         // 核心架构 1：ulimit 资源限制 (2GB 内存) + tmux 后台托管
         const safeCommand = `ulimit -v 2097152; ${command}`;
         const tmuxCmd = `tmux new-session -d -s ${taskName} '${safeCommand}'`;
+        const target = targetId || "ou_1287eaf8012ecbbff4fc2fd36af88b54"; // 默认 fallback
         
         try {
             execSync(tmuxCmd);
@@ -29,7 +30,7 @@ class AgentOverseer {
     /**
      * 定时状态监控与语义防呆（基于文件系统 FS Level）
      */
-    static startPolling(taskName, workspaceDir) {
+    static startPolling(taskName, workspaceDir, target) {
         let sameFileCount = 0;
         let lastModifiedFile = '';
         let lastModifiedTime = 0;
@@ -49,7 +50,7 @@ class AgentOverseer {
                     // 如果连续 3 次轮询（1分半钟）在死磕同一个文件且没产出，判定死锁
                     if (sameFileCount >= 3) {
                         console.log(`[Overseer] 🔴 警告！检测到 AI 连续 3 次发呆/死磕文件 (${lastModifiedFile})，陷入鬼打墙！`);
-                        this.triggerAlert(taskName, `检测到鬼打墙 (文件进度停滞: ${lastModifiedFile})，请大哥介入打断！`);
+                        this.triggerAlert(taskName, `检测到鬼打墙 (文件进度停滞: ${lastModifiedFile})，请大哥介入打断！`, target);
                         sameFileCount = 0; // 重置计数
                     }
                 } else if (latestFileStat) {
@@ -68,7 +69,8 @@ class AgentOverseer {
                     
                     this.triggerAlert(
                         taskName, 
-                        `【定时简报】任务正常运行中。\n${progressMsg}\n(如果需要我打断它，请直接跟我说)`
+                        `【定时简报】任务正常运行中。\n${progressMsg}\n(如果需要我打断它，请直接跟我说)`,
+                        target
                     );
                     lastReportTime = now;
                     // 如果一直没变动，到了10分钟也会汇报，但不重置 sameFileCount 会导致每30s一直报鬼打墙
@@ -77,7 +79,7 @@ class AgentOverseer {
 
             } catch (err) {
                 console.log(`[Overseer] 🔴 发现任务进程意外结束或被 OS Killed, 发送告警并准备收尸...`);
-                this.triggerAlert(taskName, `【严重阻碍】进程已经挂掉或被杀！快来看看！`);
+                this.triggerAlert(taskName, `【严重阻碍】进程已经挂掉或被杀！快来看看！`, target);
             }
         }, 30000); // 30s 轮询
     }
@@ -102,7 +104,7 @@ class AgentOverseer {
         }
     }
 
-    static triggerAlert(taskName, message) {
+    static triggerAlert(taskName, message, target) {
         // 核心架构 3：事件驱动精准推送
         console.log(`[Overseer 飞书推送] 任务 ${taskName}: ${message}`);
         
@@ -112,8 +114,8 @@ class AgentOverseer {
             const msgBody = `[包工头 👷] 任务: ${taskName}\n${message}`;
             // Base64 编码一下发过去比较安全，防止引用的引号炸掉 shell，这里偷懒用单引号+转义一下
             const safeMsg = msgBody.replace(/'/g, "'\\''");
-            // 必须指定 --target 和 --channel，这里写死发给大哥的飞书 ID (ou_1287eaf8012ecbbff4fc2fd36af88b54)
-            execSync(`openclaw message send --target "ou_1287eaf8012ecbbff4fc2fd36af88b54" --channel "feishu" --message '${safeMsg}'`);
+            const targetId = target || "ou_1287eaf8012ecbbff4fc2fd36af88b54";
+            execSync(`openclaw message send --target "${targetId}" --channel "feishu" --message '${safeMsg}'`);
         } catch (e) {
             console.error(`[Overseer] 🔴 飞书推送失败:`, e.message);
         }

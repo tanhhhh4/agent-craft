@@ -21,7 +21,7 @@ class AgentOverseer {
         try {
             execSync(tmuxCmd);
             console.log(`[Overseer] 🟢 任务已成功挂载至后台 tmux: ${taskName}`);
-            this.startPolling(taskName, workspaceDir);
+            this.startPolling(taskName, workspaceDir, target);
         } catch (error) {
             console.error(`[Overseer] 🔴 任务拉起失败:`, error.message);
         }

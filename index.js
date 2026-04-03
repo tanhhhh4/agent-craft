@@ -16,7 +16,7 @@ class AgentOverseer {
         // 核心架构 1：ulimit 资源限制 (2GB 内存) + tmux 后台托管
         const safeCommand = `ulimit -v 2097152; ${command}`;
         const tmuxCmd = `tmux new-session -d -s ${taskName} '${safeCommand}'`;
-        const target = targetId; 
+        const target = targetId || process.env.OPENCLAW_CURRENT_TARGET; // 支持聊天环境注入的上下文 ID
         
         try {
             execSync(tmuxCmd);
@@ -118,7 +118,17 @@ class AgentOverseer {
             if (target) {
                 execSync(`openclaw message send --target "${target}" --channel "feishu" --message '${safeMsg}'`);
             } else {
-                console.log(`[Overseer] ⚠️ 未配置 targetId，跳过飞书消息推送: ${message}`);
+                // 自动抓取 OpenClaw 配置中的当前会话上下文或者默认管理员 ID
+                try {
+                    // 尝试通过内置环境变量抓取当前被 @ 或者触发指令的上下文用户 ID (如果是通过聊天触发的话)
+                    // 由于后台进程无上下文，这里尝试获取 OpenClaw 配置里的某一个 adminId 作为兜底推送目标
+                    const defaultTarget = execSync('openclaw config get session.defaultTarget || echo ""').toString().trim();
+                    if (defaultTarget) {
+                        execSync(`openclaw message send --target "${defaultTarget}" --message '${safeMsg}'`);
+                    } else {
+                        console.log(`[Overseer] ⚠️ 未找到环境变量及默认 Target，跳过消息推送: ${message}`);
+                    }
+                } catch (autoErr) {}
             }
         } catch (e) {
             console.error(`[Overseer] 🔴 飞书推送失败:`, e.message);
